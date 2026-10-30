@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CORTEX &mdash; Institutional Memory</title>
+<style>
+/* ── reset + base ─────────────────────────────────────────── */
+:root {
+  --bg:        #07070f;
+  --surface:   #0d0d1a;
+  --border:    #1a1a2e;
+  --green:     #00ff88;
+  --cyan:      #00fff2;
+  --purple:    #b060ff;
+  --yellow:    #ffe066;
+  --red:       #ff2d55;
+  --text:      #c8c8d8;
+  --muted:     #50506a;
+  --hdr-h:     64px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Cascadia Code", "Fira Code", "JetBrains Mono", "Consolas", monospace;
+  font-size: 14px;
+  line-height: 1.65;
+  min-height: 100vh;
+  /* scanline overlay */
+  background-image: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,0.08) 2px,
+    rgba(0,0,0,0.08) 4px
+  );
+}
+
+/* ── layout ───────────────────────────────────────────────── */
+.hdr {
+  background: #050510;
+  border-bottom: 1px solid var(--green);
+  box-shadow: 0 0 24px rgba(0,255,136,0.15);
+  padding: 0 2rem;
+  height: var(--hdr-h);
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.hdr-logo {
+  font-size: 1.5rem;
+  font-weight: 900;
+  letter-spacing: 0.15em;
+  color: var(--green);
+  text-shadow: 0 0 12px var(--green);
+}
+.hdr-sub {
+  color: var(--muted);
+  font-size: 0.78rem;
+  letter-spacing: 0.05em;
+}
+.hdr-ts {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.hdr-org {
+  color: var(--cyan);
+  font-size: 0.78rem;
+  text-shadow: 0 0 8px var(--cyan);
+}
+.main { max-width: 1280px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+/* ── panels ───────────────────────────────────────────────── */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top: 2px solid var(--green);
+  margin-bottom: 2rem;
+  padding: 0;
+  overflow: hidden;
+}
+.panel-org { border-top-color: var(--cyan); }
+.panel-org .panel-header .cmd-sub { color: var(--cyan); }
+.panel-header {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: #0a0a18;
+  border-bottom: 1px solid var(--border);
+  padding: 0.55rem 1.25rem;
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+}
+.cmd      { color: var(--green); text-shadow: 0 0 8px var(--green); }
+.cmd-sep  { color: var(--muted); margin: 0 0.15rem; }
+.cmd-sub  { color: var(--text); }
+.panel > *:not(.panel-header) { padding: 1.25rem 1.5rem; }
+.panel > .stat-grid,
+.panel > .moment-grid,
+.panel > .lifecycle,
+.panel > table,
+.panel > .tagline,
+.panel > .sys-line,
+.panel > .mem-card,
+.panel > .nil,
+.panel > .graph-legend,
+.panel > .kg-wrap,
+.panel > .section-desc {
+  padding: 0; /* handled by parent padding below */
+}
+
+/* inner spacing wrapper for hero */
+.hero-panel > *:not(.panel-header) { padding: 0 1.5rem; }
+.hero-panel > .moment-grid { padding: 0 1.5rem; }
+.hero-panel > .lifecycle { padding: 1rem 1.5rem 1.5rem; }
+.hero-panel > .tagline { padding-top: 1.25rem; }
+
+/* ── stat grid (summary cards) ────────────────────────────── */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1px;
+  background: var(--border);
+  padding: 0;
+  margin: 0;
+}
+.stat-cell {
+  background: var(--surface);
+  padding: 1.1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  border-left: 3px solid transparent;
+  transition: background 0.15s;
+}
+.stat-cell:hover { background: #111124; }
+.accent-green  { border-left-color: var(--green); }
+.accent-cyan   { border-left-color: var(--cyan); }
+.accent-purple { border-left-color: var(--purple); }
+.accent-yellow { border-left-color: var(--yellow); }
+.accent-red    { border-left-color: var(--red); }
+.stat-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.stat-value {
+  font-size: 1.75rem;
+  font-weight: 900;
+  color: #fff;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+/* ── LED dots ─────────────────────────────────────────────── */
+.led {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--muted);
+}
+.led-green  { background: var(--green);  box-shadow: 0 0 6px var(--green); }
+.led-cyan   { background: var(--cyan);   box-shadow: 0 0 6px var(--cyan); }
+.led-purple { background: var(--purple); box-shadow: 0 0 6px var(--purple); }
+.led-yellow { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); }
+.led-red    { background: var(--red);    box-shadow: 0 0 6px var(--red); }
+@keyframes pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 6px var(--green); }
+  50%       { opacity: 0.3; box-shadow: 0 0 2px var(--green); }
+}
+.pulse {
+  background: var(--green);
+  box-shadow: 0 0 6px var(--green);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+/* ── hero panel ───────────────────────────────────────────── */
+.tagline {
+  color: var(--muted);
+  font-size: 0.82rem;
+  padding-bottom: 0.5rem;
+}
+.sys-line {
+  color: var(--cyan);
+  font-size: 0.78rem;
+  padding-bottom: 0.75rem;
+  text-shadow: 0 0 6px var(--cyan);
+}
+.moment-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 1px;
+  background: var(--border);
+  margin-bottom: 1px;
+}
+.moment {
+  background: var(--surface);
+  padding: 1.1rem 1.25rem;
+  border-top: 2px solid transparent;
+}
+.moment-green  { border-top-color: var(--green); }
+.moment-red    { border-top-color: var(--red); }
+.moment-cyan   { border-top-color: var(--cyan); }
+.moment-purple { border-top-color: var(--purple); }
+.moment-glyph {
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  margin-bottom: 0.3rem;
+}
+.moment-name {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.4rem;
+}
+.moment-body { font-size: 0.78rem; color: var(--muted); line-height: 1.55; }
+
+/* ── lifecycle bar ────────────────────────────────────────── */
+.lifecycle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  background: #050510;
+  border-top: 1px solid var(--border);
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  text-align: center;
+}
+.lc-node {
+  background: var(--border);
+  padding: 0.45rem 0.75rem;
+  color: var(--text);
+  white-space: nowrap;
+  line-height: 1.3;
+}
+.lc-conflict { background: rgba(255,45,85,0.15);  border: 1px solid var(--red);    color: var(--red); }
+.lc-intent   { background: rgba(255,224,102,0.1); border: 1px solid var(--yellow); color: var(--yellow); }
+.lc-org      { background: rgba(0,255,242,0.08);  border: 1px solid var(--cyan);   color: var(--cyan); }
+.lc-default  { border: 1px solid var(--border); }
+.lc-sub      { color: var(--muted); font-size: 0.65rem; }
+.lc-arrow    { color: var(--muted); }
+
+/* ── tables ───────────────────────────────────────────────── */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+th, td { padding: 0.55rem 0.85rem; text-align: left; border-bottom: 1px solid var(--border); }
+th { background: #0a0a18; color: var(--muted); font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase; }
+tr:hover td { background: rgba(255,255,255,0.02); }
+.summary-row td { background: #0a0a18; color: var(--text); font-size: 0.78rem; }
+.val-green { color: var(--green); }
+.val-red   { color: var(--red); }
+.sep { color: var(--muted); margin: 0 0.5rem; }
+.mono { font-family: inherit; letter-spacing: 0.04em; }
+.file-path { color: var(--cyan); font-size: 0.78rem; }
+.anti { color: var(--red); font-size: 0.78rem; }
+.mem-ref {
+  display: inline-block;
+  background: rgba(176,96,255,0.15);
+  border: 1px solid var(--purple);
+  color: var(--purple);
+  padding: 0.05em 0.4em;
+  font-size: 0.72rem;
+  margin-right: 0.2rem;
+}
+.ex-row td { padding: 0 0.85rem 0.75rem; }
+.code-block {
+  background: #050510;
+  border-left: 2px solid var(--purple);
+  padding: 0.7rem 1rem;
+  font-size: 0.78rem;
+  overflow-x: auto;
+  color: var(--muted);
+}
+
+/* ── tags / badges ────────────────────────────────────────── */
+.tag {
+  display: inline-block;
+  padding: 0.1em 0.5em;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border: 1px solid currentColor;
+}
+.tag-green   { color: var(--green); }
+.tag-cyan    { color: var(--cyan); }
+.tag-purple  { color: var(--purple); }
+.tag-yellow  { color: var(--yellow); }
+.tag-red     { color: var(--red); }
+.tag-active     { color: var(--green); }
+.tag-superseded { color: var(--yellow); }
+.tag-overridden { color: var(--red); }
+.tag-unknown    { color: var(--muted); border-color: var(--muted); }
+
+/* ── knowledge graph ──────────────────────────────────────── */
+.graph-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.2rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+  padding: 1rem 1.5rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+}
+.legend-item { display: flex; align-items: center; gap: 0.4rem; }
+.legend-dot  { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.kg-wrap {
+  position: relative;
+  width: 100%;
+  background: #050510;
+  border-top: 1px solid var(--border);
+}
+#kg-canvas {
+  display: block;
+  width: 100%;
+}
+#kg-tooltip {
+  display: none;
+  position: absolute;
+  background: #0a0a18;
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 0.75rem;
+  padding: 0.4rem 0.7rem;
+  pointer-events: none;
+  max-width: 320px;
+  white-space: normal;
+  line-height: 1.4;
+  z-index: 10;
+}
+
+/* ── memory detail cards ──────────────────────────────────── */
+.mem-card {
+  border-bottom: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+  overflow: hidden;
+}
+.mem-card.active     { border-left-color: var(--green); }
+.mem-card.superseded { border-left-color: var(--yellow); }
+.mem-card.overridden { border-left-color: var(--red); }
+.mem-card.mem-org    { border-left-color: var(--cyan); }
+.mem-card summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding: 0.75rem 1.5rem;
+  font-size: 0.82rem;
+}
+.mem-card summary::-webkit-details-marker { display: none; }
+.mem-card summary::before {
+  content: "\25B6";
+  font-size: 0.6rem;
+  color: var(--muted);
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+.mem-card[open] summary::before { transform: rotate(90deg); }
+.mem-card[open] summary { background: #0a0a18; }
+.mem-id { color: var(--muted); font-size: 0.75rem; }
+.mem-body { padding: 0.5rem 1.5rem 1rem; background: #050510; font-size: 0.8rem; }
+.mem-field { padding: 0.18rem 0; }
+.fk { color: var(--cyan); }
+.org-field {
+  background: rgba(0,255,242,0.04);
+  border-left: 2px solid var(--cyan);
+  padding: 0.25rem 0.6rem;
+  margin-bottom: 0.2rem;
+}
+
+/* ── misc ─────────────────────────────────────────────────── */
+.nil { color: var(--muted); font-size: 0.8rem; font-style: italic; padding: 1.25rem 1.5rem; }
+.section-desc { color: var(--muted); font-size: 0.78rem; padding: 0.75rem 1.5rem 0; }
+
+@media (max-width: 640px) {
+  .hdr { flex-wrap: wrap; height: auto; padding: 0.75rem 1rem; gap: 0.5rem; }
+  .hdr-ts { margin-left: 0; }
+  .stat-grid { grid-template-columns: repeat(2, 1fr); }
+  .moment-grid { grid-template-columns: 1fr; }
+  .lifecycle { flex-direction: column; align-items: flex-start; }
+  .main { padding: 1rem; }
+}
+</style>
+</head>
+<body>
+<header class="hdr">
+  <div class="hdr-logo">CORTEX</div>
+  <div class="hdr-sub">living organisational record engine</div>
+  <div class="hdr-org">ORG_MONITOR &gt; active &mdash; 1 upstream project connected</div>
+  <div class="hdr-ts">generated 2026-08-10 16:49:30</div>
+</header>
+<main class="main">
+<section class="panel"><div class="panel-header"><span class="cmd">cortex</span><span class="cmd-sep">::</span><span class="cmd-sub">intelligence_summary</span></div><div class="stat-grid"><div class="stat-cell accent-green"><div class="stat-label"><span class="led led-green"></span>MEMORIES</div><div class="stat-value">4</div></div><div class="stat-cell accent-green"><div class="stat-label"><span class="led pulse"></span>ACTIVE</div><div class="stat-value">3</div></div><div class="stat-cell accent-yellow"><div class="stat-label"><span class="led led-yellow"></span>EVOLVED</div><div class="stat-value">1</div></div><div class="stat-cell accent-cyan"><div class="stat-label"><span class="led led-cyan"></span>ORG_SHARED</div><div class="stat-value">1</div></div><div class="stat-cell accent-red"><div class="stat-label"><span class="led led-red"></span>SECURITY</div><div class="stat-value">4</div></div></div></section>
+<section class="panel hero-panel"><div class="panel-header"><span class="cmd">cortex</span><span class="cmd-sep">::</span><span class="cmd-sub">system_overview</span></div><div class="tagline">// Every engineering activity strengthens the next engineering decision.</div><div class="sys-line">SYS &gt; org_monitor.active &mdash; tracking <strong>1</strong> upstream project</div><div class="lifecycle"><div class="lc-node lc-default">DECISION<br><span class="lc-sub">recorded</span></div><div class="lc-arrow">&#8594;</div><div class="lc-node lc-conflict">CONFLICT<br><span class="lc-sub">detected</span></div><div class="lc-arrow">&#8594;</div><div class="lc-node lc-default">REVIEW<br><span class="lc-sub">human</span></div><div class="lc-arrow">&#8594;</div><div class="lc-node lc-intent">OVERRIDE<br><span class="lc-sub">intentional</span></div><div class="lc-arrow">&#8594;</div><div class="lc-node lc-default">NEW_MEM<br><span class="lc-sub">written</span></div><div class="lc-arrow">&#8594;</div><div class="lc-node lc-org">ORG_PROMOTE<br><span class="lc-sub">shared</span></div></div></section>
+<section class="panel"><div class="panel-header"><span class="cmd">cortex</span><span class="cmd-sep">::</span><span class="cmd-sub">knowledge_graph</span></div><div class="graph-legend"><span class="legend-item"><span class="legend-dot" style="background:#00ff88"></span> active</span><span class="legend-item"><span class="legend-dot" style="background:#00fff2"></span> org</span><span class="legend-item"><span class="legend-dot" style="background:#ff2d55"></span> security</span><span class="legend-item"><span class="legend-dot" style="background:#50506a"></span> superseded</span><span class="legend-item" style="gap:0.3rem"><span style="border-top:2px dashed #50506a;width:18px;display:inline-block"></span> blocks</span></div>
+<div class="kg-wrap">
+  <canvas id="kg-canvas"></canvas>
+  <div id="kg-tooltip"></div>
+</div>
+<script>
+(function() {
+  var RAW = {"nodes": [{"id": 1, "label": "#001: Use exponential backoff for authentication API r", "type": "security", "full": "Use exponential backoff for authentication API retries on transient failures"}, {"id": 2, "label": "#002: Use fixed 2-second retry intervals for authentic", "type": "security", "full": "Use fixed 2-second retry intervals for authentication API \u2014 exponential backoff causes unacceptable UX latency under normal load patterns"}, {"id": 3, "label": "#003: Standardise authentication retry policy across a [auth-service]", "type": "org", "full": "Standardise authentication retry policy across all services \u2014 fixed intervals \u2264 3 s for user-facing flows; exponential backoff reserved for background/batch jobs only"}, {"id": 4, "label": "#004: Refresh authentication tokens proactively 5 minu", "type": "security", "full": "Refresh authentication tokens proactively 5 minutes before expiry rather than reacting to 401 responses"}], "links": [{"source": 1, "target": 2, "kind": "depends"}, {"source": 2, "target": 3, "kind": "depends"}, {"source": 2, "target": 4, "kind": "depends"}]};
+  var canvas = document.getElementById('kg-canvas');
+  var tooltip = document.getElementById('kg-tooltip');
+  var ctx = canvas.getContext('2d');
+
+  var COLOR = {
+    active:     '#00ff88',
+    org:        '#00fff2',
+    security:   '#ff2d55',
+    superseded: '#50506a',
+    bg:         '#07070f',
+    surface:    '#0d0d1a',
+    border:     '#1a1a2e',
+    text:       '#c8c8d8',
+    depends:    '#b060ff',
+    blocks:     '#ff2d55',
+  };
+
+  function resize() {
+    var wrap = canvas.parentElement;
+    canvas.width  = wrap.clientWidth  || 900;
+    canvas.height = Math.max(420, Math.min(600, window.innerHeight * 0.55));
+  }
+  resize();
+  window.addEventListener('resize', function() { resize(); sim(); });
+
+  /* --- build node/link objects --- */
+  var nodes = RAW.nodes.map(function(n) {
+    return Object.assign({}, n, {
+      x: canvas.width  * 0.1 + Math.random() * canvas.width  * 0.8,
+      y: canvas.height * 0.1 + Math.random() * canvas.height * 0.8,
+      vx: 0, vy: 0, r: n.type === 'org' ? 14 : 11,
+    });
+  });
+  var nodeMap = {};
+  nodes.forEach(function(n) { nodeMap[n.id] = n; });
+
+  var links = RAW.links.map(function(l) {
+    return { source: nodeMap[l.source], target: nodeMap[l.target], kind: l.kind };
+  }).filter(function(l) { return l.source && l.target; });
+
+  /* --- force simulation --- */
+  var REPEL = 4800, ATTRACT = 0.012, DAMP = 0.82, LINK_LEN = 160, CENTER = 0.008;
+  var running = true;
+
+  function tick() {
+    var W = canvas.width, H = canvas.height;
+    nodes.forEach(function(a) {
+      /* repulsion */
+      nodes.forEach(function(b) {
+        if (a === b) return;
+        var dx = a.x - b.x, dy = a.y - b.y;
+        var d2 = dx*dx + dy*dy + 1;
+        var f = REPEL / d2;
+        a.vx += f * dx / Math.sqrt(d2);
+        a.vy += f * dy / Math.sqrt(d2);
+      });
+      /* center gravity */
+      a.vx += (W/2 - a.x) * CENTER;
+      a.vy += (H/2 - a.y) * CENTER;
+    });
+    /* link spring */
+    links.forEach(function(l) {
+      var dx = l.target.x - l.source.x, dy = l.target.y - l.source.y;
+      var d = Math.sqrt(dx*dx + dy*dy) || 1;
+      var f = (d - LINK_LEN) * ATTRACT;
+      var fx = f * dx/d, fy = f * dy/d;
+      l.source.vx += fx; l.source.vy += fy;
+      l.target.vx -= fx; l.target.vy -= fy;
+    });
+    /* integrate + clamp */
+    nodes.forEach(function(n) {
+      n.vx *= DAMP; n.vy *= DAMP;
+      n.x = Math.max(n.r + 4, Math.min(W - n.r - 4, n.x + n.vx));
+      n.y = Math.max(n.r + 4, Math.min(H - n.r - 4, n.y + n.vy));
+    });
+  }
+
+  /* --- glow helper --- */
+  function glow(color, blur) {
+    ctx.shadowColor = color;
+    ctx.shadowBlur  = blur;
+  }
+
+  /* --- draw --- */
+  var _frame = 0;
+  function draw() {
+    var W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = COLOR.bg;
+    ctx.fillRect(0, 0, W, H);
+
+    /* links */
+    links.forEach(function(l) {
+      var sx = l.source.x, sy = l.source.y, tx = l.target.x, ty = l.target.y;
+      var isBlocks = l.kind === 'blocks';
+      ctx.save();
+      ctx.beginPath();
+      if (isBlocks) { ctx.setLineDash([5,4]); }
+      ctx.strokeStyle = isBlocks ? COLOR.blocks : COLOR.depends;
+      ctx.lineWidth = 1.5;
+      glow(isBlocks ? COLOR.blocks : COLOR.depends, 6);
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(tx, ty);
+      ctx.stroke();
+      /* arrowhead */
+      var angle = Math.atan2(ty - sy, tx - sx);
+      var tr = l.target.r + 3;
+      var ax = tx - tr * Math.cos(angle), ay = ty - tr * Math.sin(angle);
+      ctx.beginPath();
+      ctx.setLineDash([]);
+      ctx.fillStyle = isBlocks ? COLOR.blocks : COLOR.depends;
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(ax - 9*Math.cos(angle-0.4), ay - 9*Math.sin(angle-0.4));
+      ctx.lineTo(ax - 9*Math.cos(angle+0.4), ay - 9*Math.sin(angle+0.4));
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    });
+
+    /* nodes */
+    var pulse = 0.5 + 0.5 * Math.sin(_frame * 0.06);
+    nodes.forEach(function(n) {
+      var c = COLOR[n.type] || COLOR.active;
+      var isActive = n.type === 'active';
+      var glowR = isActive ? 8 + pulse * 6 : 8;
+
+      /* outer glow ring for org */
+      if (n.type === 'org') {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, n.r + 5, 0, Math.PI*2);
+        ctx.strokeStyle = COLOR.org;
+        ctx.lineWidth = 1;
+        glow(COLOR.org, 12);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      /* node circle */
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, n.r, 0, Math.PI*2);
+      ctx.fillStyle = COLOR.surface;
+      ctx.strokeStyle = c;
+      ctx.lineWidth = n === _hover ? 3 : 2;
+      glow(c, n === _hover ? 20 : glowR);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+
+      /* superseded: dashed stroke overlay */
+      if (n.type === 'superseded') {
+        ctx.save();
+        ctx.beginPath();
+        ctx.setLineDash([4,3]);
+        ctx.arc(n.x, n.y, n.r + 3, 0, Math.PI*2);
+        ctx.strokeStyle = COLOR.superseded;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      /* id label inside node */
+      ctx.save();
+      ctx.fillStyle = c;
+      ctx.font = 'bold 9px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      glow(c, 4);
+      ctx.fillText('#' + String(n.id).padStart(3,'0'), n.x, n.y);
+      ctx.restore();
+    });
+
+    _frame++;
+  }
+
+  function sim() {
+    if (!running) return;
+    tick(); tick(); tick();
+    draw();
+    requestAnimationFrame(sim);
+  }
+  sim();
+
+  /* --- interaction --- */
+  var _hover = null, _drag = null, _dragOffX = 0, _dragOffY = 0;
+
+  function getPos(e) {
+    var r = canvas.getBoundingClientRect();
+    var src = e.touches ? e.touches[0] : e;
+    return { x: src.clientX - r.left, y: src.clientY - r.top };
+  }
+  function hitNode(x, y) {
+    for (var i = nodes.length-1; i >= 0; i--) {
+      var n = nodes[i];
+      var dx = x-n.x, dy = y-n.y;
+      if (dx*dx + dy*dy < (n.r+6)*(n.r+6)) return n;
+    }
+    return null;
+  }
+
+  canvas.addEventListener('mousemove', function(e) {
+    var p = getPos(e);
+    if (_drag) {
+      _drag.x = p.x + _dragOffX;
+      _drag.y = p.y + _dragOffY;
+      _drag.vx = 0; _drag.vy = 0;
+      return;
+    }
+    var n = hitNode(p.x, p.y);
+    _hover = n;
+    canvas.style.cursor = n ? 'grab' : 'default';
+    if (n) {
+      tooltip.style.display = 'block';
+      tooltip.style.left = (p.x + 14) + 'px';
+      tooltip.style.top  = (p.y - 10) + 'px';
+      tooltip.textContent = n.full;
+    } else {
+      tooltip.style.display = 'none';
+    }
+  });
+  canvas.addEventListener('mouseleave', function() {
+    _hover = null;
+    _drag  = null;
+    tooltip.style.display = 'none';
+    canvas.style.cursor = 'default';
+  });
+  canvas.addEventListener('mousedown', function(e) {
+    var p = getPos(e);
+    var n = hitNode(p.x, p.y);
+    if (n) {
+      _drag = n;
+      _dragOffX = n.x - p.x;
+      _dragOffY = n.y - p.y;
+      canvas.style.cursor = 'grabbing';
+    }
+  });
+  canvas.addEventListener('mouseup', function() {
+    _drag = null;
+    canvas.style.cursor = _hover ? 'grab' : 'default';
+  });
+})();
+</script></section>
+<section class="panel panel-org"><div class="panel-header"><span class="cmd">cortex</span><span class="cmd-sep">::</span><span class="cmd-sub">org_registry</span></div><div class="section-desc">// decisions promoted from individual projects into shared organisational knowledge</div><table><thead><tr><th>ID</th><th>Decision</th><th>Source Project</th><th>Promoted By</th><th>Status</th><th>Age</th></tr></thead><tbody><tr><td class="mono">#003</td><td>Standardise authentication retry policy across all services — fixed intervals ≤ 3 s for user-facing flows; exponential backoff reserved for background/batch jobs only</td><td><span class="tag tag-cyan">auth-service</span></td><td>@sanya</td><td><span class="tag tag-active">Active</span> <span class="tag tag-red">SEC</span></td><td class="mono">8d</td></tr></tbody></table></section>
+<section class="panel"><div class="panel-header"><span class="cmd">cortex</span><span class="cmd-sep">::</span><span class="cmd-sub">carbon_impact</span></div><table><thead><tr><th>ID</th><th>Decision</th><th>Impact</th></tr></thead><tbody><tr><td class="mono">#001</td><td>Use exponential backoff for authentication API retries on transient failures</td><td class="val-green">~120 kWh/month saved</td></tr><tr><td class="mono">#002</td><td>Use fixed 2-second retry intervals for authentication API — exponential backoff causes unacceptable UX latency under normal load patterns</td><td class="val-green">~80 kWh/month saved</td></tr><tr><td class="mono">#003</td><td>Standardise authentication retry policy across all services — fixed intervals ≤ 3 s for user-facing flows; exponential backoff reserved for background/batch jobs only</td><td class="val-green">~200 kWh/month saved</td></tr><tr><td class="mono">#004</td><td>Refresh authentication tokens proactively 5 minutes before expiry rather than reacting to 401 responses</td><td class="val-green">~60 kWh/month saved</td></tr><tr class="summary-row"><td colspan="2">TOTALS</td><td><span class="val-green">savings: 460 kWh</span><span class="sep">|</span><span class="val-red">cost: 0 kWh</span><span class="sep">|</span>net: +460 kWh<span class="sep">|</span>CO2: 184.0 kg/mo<span class="sep">|</span>trees: 100.4/yr</td></tr></tbody></table></section>
+<section class="panel"><div class="panel-header"><span class="cmd">cortex</span><span class="cmd-sep">::</span><span class="cmd-sub">file_coverage</span></div><table><thead><tr><th>File Path</th><th>Governing Memories</th><th>Tier</th><th>Security</th><th>Status</th></tr></thead><tbody><tr><td class="mono file-path">services/*/auth/client.py</td><td><span class="mem-ref">#003</span></td><td><span class="tag tag-cyan">ORG</span></td><td><span class="tag tag-red">SEC</span></td><td>Active</td></tr><tr><td class="mono file-path">src/auth/client.py</td><td><span class="mem-ref">#001</span> <span class="mem-ref">#002</span> <span class="mem-ref">#003</span> <span class="mem-ref">#004</span></td><td><span class="tag tag-cyan">ORG</span></td><td><span class="tag tag-red">SEC</span></td><td>Active, Superseded</td></tr><tr><td class="mono file-path">src/auth/retry.py</td><td><span class="mem-ref">#001</span> <span class="mem-ref">#002</span> <span class="mem-ref">#003</span></td><td><span class="tag tag-cyan">ORG</span></td><td><span class="tag tag-red">SEC</span></td><td>Active, Superseded</td></tr><tr><td class="mono file-path">src/auth/tokens.py</td><td><span class="mem-ref">#004</span></td><td><span class="tag tag-purple">PROJECT</span></td><td><span class="tag tag-red">SEC</span></td><td>Active</td></tr></tbody></table></section>
+<section class="panel"><div class="panel-header"><span class="cmd">cortex</span><span class="cmd-sep">::</span><span class="cmd-sub">security_inventory</span></div><table><thead><tr><th>ID</th><th>Decision</th><th>Decided By</th><th>Date</th><th>Age</th><th>Status</th><th>Scope</th></tr></thead><tbody><tr><td class="mono">#001</td><td>Use exponential backoff for authentication API retries on transient failures</td><td>@priya, @arjun</td><td class="mono">2026-07-10</td><td class="mono">31d</td><td>Superseded</td><td><span class="tag tag-purple">PROJECT</span></td></tr><tr><td class="mono">#002</td><td>Use fixed 2-second retry intervals for authentication API — exponential backoff causes unacceptable UX latency under normal load patterns</td><td>@arjun, @sanya</td><td class="mono">2026-07-28</td><td class="mono">13d</td><td>Active</td><td><span class="tag tag-purple">PROJECT</span></td></tr><tr><td class="mono">#003</td><td>Standardise authentication retry policy across all services — fixed intervals ≤ 3 s for user-facing flows; exponential backoff reserved for background/batch jobs only</td><td>@sanya, @ketki</td><td class="mono">2026-08-02</td><td class="mono">8d</td><td>Active</td><td><span class="tag tag-cyan">ORG</span></td></tr><tr><td class="mono">#004</td><td>Refresh authentication tokens proactively 5 minutes before expiry rather than reacting to 401 responses</td><td>@priya</td><td class="mono">2026-08-05</td><td class="mono">5d</td><td>Active</td><td><span class="tag tag-purple">PROJECT</span></td></tr></tbody></table></section>
+<section class="panel"><div class="panel-header"><span class="cmd">cortex</span><span class="cmd-sep">::</span><span class="cmd-sub">pattern_rules</span></div><table><thead><tr><th>ID</th><th>Rule</th><th>Anti-pattern</th><th>Language</th><th>Established By</th></tr></thead><tbody><tr><td class="mono">P#001</td><td>Never swallow authentication errors silently — always log the attempt, the failure reason, and the retry count before retrying</td><td class="mono anti">Catching AuthError without logging and silently retrying</td><td>python</td><td>@arjun</td></tr><tr class="ex-row"><td colspan="5"><pre class="code-block">Bad:  except AuthError:
+retry()
+Good: except AuthError as exc:
+logger.warning(&quot;auth retry %d/%d: %s&quot;, attempt, MAX_RETRIES, exc)
+retry()</pre></td></tr><tr><td class="mono">P#002</td><td>Use the shared retry module (auth.retry.with_policy) for all authentication calls — do not write inline retry loops in business logic</td><td class="mono anti">Ad-hoc try/except retry loops scattered across service handlers</td><td>python</td><td>@sanya, @arjun</td></tr><tr class="ex-row"><td colspan="5"><pre class="code-block">Bad:  for attempt in range(3):
+try:
+return auth_client.login(user, pwd)
+except Exception:
+time.sleep(2)
+Good: return auth.retry.with_policy(auth_client.login, user, pwd)</pre></td></tr></tbody></table></section>
+<section class="panel"><div class="panel-header"><span class="cmd">cortex</span><span class="cmd-sep">::</span><span class="cmd-sub">memory_details</span></div><details class="mem-card active mem-org"><summary><span class="mem-id">#003</span> &mdash; Standardise authentication retry policy across all services — fixed intervals ≤ 3 s for user-facing flows; exponential backoff reserved for background/batch jobs only <span class="tag tag-active">Active</span><span class="tag tag-cyan" style="margin-left:0.5rem">ORG</span></summary><div class="mem-body"><div class="mem-field org-field"><span class="fk">source_project:</span> auth-service</div><div class="mem-field org-field"><span class="fk">promoted_by:</span> @sanya</div><div class="mem-field org-field"><span class="fk">scope:</span> Organisation</div><div class="mem-field"><span class="fk">Source MR:</span> !19 — Promote authentication retry standard to org-wide policy</div><div class="mem-field"><span class="fk">Date:</span> 2026-08-02</div><div class="mem-field"><span class="fk">Governs files:</span> src/auth/client.py, src/auth/retry.py, services/*/auth/client.py</div><div class="mem-field"><span class="fk">Decision:</span> Standardise authentication retry policy across all services — fixed intervals ≤ 3 s for user-facing flows; exponential backoff reserved for background/batch jobs only</div><div class="mem-field"><span class="fk">Rejected:</span> Per-service ad-hoc retry configuration</div><div class="mem-field"><span class="fk">Reason:</span> Inconsistent retry strategies across services caused cascading delays during the July auth outage; a shared policy enforced via the org-memory ensures all teams stay aligned</div><div class="mem-field"><span class="fk">Future implication:</span> All new services must import the shared retry configuration from the platform team&#x27;s auth library rather than implementing their own</div><div class="mem-field"><span class="fk">Decided by:</span> @sanya, @ketki</div><div class="mem-field"><span class="fk">Confidence:</span> HIGH</div><div class="mem-field"><span class="fk">Status:</span> Active</div><div class="mem-field"><span class="fk">Carbon impact:</span> ~200 kWh/month saved</div><div class="mem-field"><span class="fk">Incident type:</span> auth</div><div class="mem-field"><span class="fk">Depends on:</span> Memory #002</div><div class="mem-field"><span class="fk">Blocks:</span> N/A</div><div class="mem-field"><span class="fk">Source type:</span> discussion</div><div class="mem-field"><span class="fk">Security relevant:</span> yes</div></div></details><details class="mem-card active"><summary><span class="mem-id">#002</span> &mdash; Use fixed 2-second retry intervals for authentication API — exponential backoff causes unacceptable UX latency under normal load patterns <span class="tag tag-active">Active</span></summary><div class="mem-body"><div class="mem-field"><span class="fk">Source MR:</span> !17 — Fix login latency regression — switch auth retry to fixed intervals</div><div class="mem-field"><span class="fk">Date:</span> 2026-07-28</div><div class="mem-field"><span class="fk">Governs files:</span> src/auth/client.py, src/auth/retry.py</div><div class="mem-field"><span class="fk">Decision:</span> Use fixed 2-second retry intervals for authentication API — exponential backoff causes unacceptable UX latency under normal load patterns</div><div class="mem-field"><span class="fk">Rejected:</span> Exponential backoff (Memory #001)</div><div class="mem-field"><span class="fk">Reason:</span> Load testing showed p95 login time jumped to 14 s under exponential backoff during burst traffic; fixed 2 s intervals kept p95 under 6 s with no increase in error rate</div><div class="mem-field"><span class="fk">Future implication:</span> Revisit if the authentication service introduces adaptive rate-limit headers; exponential backoff may then be appropriate for background jobs only</div><div class="mem-field"><span class="fk">Decided by:</span> @arjun, @sanya</div><div class="mem-field"><span class="fk">Confidence:</span> HIGH</div><div class="mem-field"><span class="fk">Status:</span> Active</div><div class="mem-field"><span class="fk">Carbon impact:</span> ~80 kWh/month saved</div><div class="mem-field"><span class="fk">Incident type:</span> auth</div><div class="mem-field"><span class="fk">Depends on:</span> Memory #001</div><div class="mem-field"><span class="fk">Blocks:</span> N/A</div><div class="mem-field"><span class="fk">Source type:</span> both</div><div class="mem-field"><span class="fk">Security relevant:</span> yes</div></div></details><details class="mem-card active"><summary><span class="mem-id">#004</span> &mdash; Refresh authentication tokens proactively 5 minutes before expiry rather than reacting to 401 responses <span class="tag tag-active">Active</span></summary><div class="mem-body"><div class="mem-field"><span class="fk">Source MR:</span> !21 — Proactive token refresh before expiry</div><div class="mem-field"><span class="fk">Date:</span> 2026-08-05</div><div class="mem-field"><span class="fk">Governs files:</span> src/auth/tokens.py, src/auth/client.py</div><div class="mem-field"><span class="fk">Decision:</span> Refresh authentication tokens proactively 5 minutes before expiry rather than reacting to 401 responses</div><div class="mem-field"><span class="fk">Rejected:</span> Reactive refresh on 401 error</div><div class="mem-field"><span class="fk">Reason:</span> Reactive refresh adds a full round-trip latency on every token expiry; proactive refresh keeps sessions seamless and eliminates a class of transient auth failures that previously triggered unnecessary retries</div><div class="mem-field"><span class="fk">Future implication:</span> The retry module (Memory #002) and the token refresh module must coordinate — a 401 received during the 5-minute proactive window should short-circuit retries and trigger immediate refresh</div><div class="mem-field"><span class="fk">Decided by:</span> @priya</div><div class="mem-field"><span class="fk">Confidence:</span> MEDIUM</div><div class="mem-field"><span class="fk">Status:</span> Active</div><div class="mem-field"><span class="fk">Carbon impact:</span> ~60 kWh/month saved</div><div class="mem-field"><span class="fk">Incident type:</span> auth</div><div class="mem-field"><span class="fk">Depends on:</span> Memory #002</div><div class="mem-field"><span class="fk">Blocks:</span> N/A</div><div class="mem-field"><span class="fk">Source type:</span> code</div><div class="mem-field"><span class="fk">Security relevant:</span> yes</div></div></details><details class="mem-card superseded"><summary><span class="mem-id">#001</span> &mdash; Use exponential backoff for authentication API retries on transient failures <span class="tag tag-superseded">Superseded</span></summary><div class="mem-body"><div class="mem-field"><span class="fk">Source MR:</span> !12 — Add retry handling for authentication API calls</div><div class="mem-field"><span class="fk">Date:</span> 2026-07-10</div><div class="mem-field"><span class="fk">Governs files:</span> src/auth/client.py, src/auth/retry.py</div><div class="mem-field"><span class="fk">Decision:</span> Use exponential backoff for authentication API retries on transient failures</div><div class="mem-field"><span class="fk">Rejected:</span> Fixed retry intervals</div><div class="mem-field"><span class="fk">Reason:</span> Exponential backoff prevents retry storms during provider outages and aligns with rate-limit headers returned by the authentication service</div><div class="mem-field"><span class="fk">Future implication:</span> Do not revert to fixed intervals unless load testing confirms exponential delays exceed acceptable user-facing latency thresholds</div><div class="mem-field"><span class="fk">Decided by:</span> @priya, @arjun</div><div class="mem-field"><span class="fk">Confidence:</span> HIGH</div><div class="mem-field"><span class="fk">Status:</span> Superseded</div><div class="mem-field"><span class="fk">Carbon impact:</span> ~120 kWh/month saved</div><div class="mem-field"><span class="fk">Incident type:</span> auth</div><div class="mem-field"><span class="fk">Depends on:</span> N/A</div><div class="mem-field"><span class="fk">Blocks:</span> N/A</div><div class="mem-field"><span class="fk">Source type:</span> discussion</div><div class="mem-field"><span class="fk">Security relevant:</span> yes</div></div></details></section>
+</main>
+</body>
+</html>

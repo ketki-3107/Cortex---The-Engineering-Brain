@@ -1,0 +1,109 @@
+CORTEX Memory #001
+Source MR: !12 — Add retry handling for authentication API calls
+Date: 2026-07-10
+Governs files: src/auth/client.py, src/auth/retry.py
+Decision: Use exponential backoff for authentication API retries on transient failures
+Rejected: Fixed retry intervals
+Reason: Exponential backoff prevents retry storms during provider outages and aligns with rate-limit headers returned by the authentication service
+Future implication: Do not revert to fixed intervals unless load testing confirms exponential delays exceed acceptable user-facing latency thresholds
+Decided by: @priya, @arjun
+Confidence: HIGH
+Status: Superseded
+Carbon impact: ~120 kWh/month saved
+Incident type: auth
+Depends on: N/A
+Blocks: N/A
+Source type: discussion
+Security relevant: yes
+
+CORTEX Memory #002
+Source MR: !17 — Fix login latency regression — switch auth retry to fixed intervals
+Date: 2026-07-28
+Governs files: src/auth/client.py, src/auth/retry.py
+Decision: Use fixed 2-second retry intervals for authentication API — exponential backoff causes unacceptable UX latency under normal load patterns
+Rejected: Exponential backoff (Memory #001)
+Reason: Load testing showed p95 login time jumped to 14 s under exponential backoff during burst traffic; fixed 2 s intervals kept p95 under 6 s with no increase in error rate
+Future implication: Revisit if the authentication service introduces adaptive rate-limit headers; exponential backoff may then be appropriate for background jobs only
+Decided by: @arjun, @sanya
+Confidence: HIGH
+Status: Active
+Carbon impact: ~80 kWh/month saved
+Incident type: auth
+Depends on: Memory #001
+Blocks: N/A
+Source type: both
+Security relevant: yes
+
+CORTEX Memory #003
+Source MR: !19 — Promote authentication retry standard to org-wide policy
+Date: 2026-08-02
+Governs files: src/auth/client.py, src/auth/retry.py, services/*/auth/client.py
+Decision: Standardise authentication retry policy across all services — fixed intervals ≤ 3 s for user-facing flows; exponential backoff reserved for background/batch jobs only
+Rejected: Per-service ad-hoc retry configuration
+Reason: Inconsistent retry strategies across services caused cascading delays during the July auth outage; a shared policy enforced via the org-memory ensures all teams stay aligned
+Future implication: All new services must import the shared retry configuration from the platform team's auth library rather than implementing their own
+Decided by: @sanya, @ketki
+Confidence: HIGH
+Status: Active
+Carbon impact: ~200 kWh/month saved
+Incident type: auth
+Depends on: Memory #002
+Blocks: N/A
+Scope: Organisation
+Source project: auth-service
+Promoted by: @sanya
+Source type: discussion
+Security relevant: yes
+
+CORTEX Memory #004
+Source MR: !21 — Proactive token refresh before expiry
+Date: 2026-08-05
+Governs files: src/auth/tokens.py, src/auth/client.py
+Decision: Refresh authentication tokens proactively 5 minutes before expiry rather than reacting to 401 responses
+Rejected: Reactive refresh on 401 error
+Reason: Reactive refresh adds a full round-trip latency on every token expiry; proactive refresh keeps sessions seamless and eliminates a class of transient auth failures that previously triggered unnecessary retries
+Future implication: The retry module (Memory #002) and the token refresh module must coordinate — a 401 received during the 5-minute proactive window should short-circuit retries and trigger immediate refresh
+Decided by: @priya
+Confidence: MEDIUM
+Status: Active
+Carbon impact: ~60 kWh/month saved
+Incident type: auth
+Depends on: Memory #002
+Blocks: N/A
+Source type: code
+Security relevant: yes
+
+CORTEX Pattern #001
+Source MR: !12 — Add retry handling for authentication API calls
+Date: 2026-07-10
+Rule: Never swallow authentication errors silently — always log the attempt, the failure reason, and the retry count before retrying
+Anti-pattern: Catching AuthError without logging and silently retrying
+Language: python
+Reason: Silent retries mask systematic authentication failures; without visibility into retry counts the team cannot distinguish transient blips from degraded auth provider health
+Established by: @arjun
+Status: Active
+Examples:
+  Bad:  except AuthError:
+            retry()
+
+  Good: except AuthError as exc:
+            logger.warning("auth retry %d/%d: %s", attempt, MAX_RETRIES, exc)
+            retry()
+
+CORTEX Pattern #002
+Source MR: !17 — Fix login latency regression
+Date: 2026-07-28
+Rule: Use the shared retry module (auth.retry.with_policy) for all authentication calls — do not write inline retry loops in business logic
+Anti-pattern: Ad-hoc try/except retry loops scattered across service handlers
+Language: python
+Reason: Inline retry loops diverge over time and cannot be updated centrally; the shared module enforces the org-standard policy (Memory #003) and emits structured retry telemetry automatically
+Established by: @sanya, @arjun
+Status: Active
+Examples:
+  Bad:  for attempt in range(3):
+            try:
+                return auth_client.login(user, pwd)
+            except Exception:
+                time.sleep(2)
+
+  Good: return auth.retry.with_policy(auth_client.login, user, pwd)
